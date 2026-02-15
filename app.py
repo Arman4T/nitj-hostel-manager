@@ -11,7 +11,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 1. THEME LOGIC (SLIDER VERSION) ---
+# --- GLOBAL STATE (THE SYNC FIX) ---
+# We use a Class to hold data that must be shared across ALL users
+class HostelSharedData:
+    def __init__(self):
+        self.menu = {
+            "Breakfast": "Aloo Paratha & Curd",
+            "Lunch": "Rajma Chawal",
+            "Dinner": "Mix Veg & Chapati"
+        }
+        self.poll = {"active": False, "question": "", "options": [], "votes": {}}
+        self.tickets = [
+            {"Room": "204", "Issue": "Fan Broken", "Priority": "Medium", "Status": "Open"}
+        ]
+        self.wastage = [{"Day": "Monday", "Waste (kg)": 12}]
+
+# @st.cache_resource ensures this object is created ONLY ONCE and shared by everyone
+@st.cache_resource
+def get_shared_data():
+    return HostelSharedData()
+
+# Load the shared data
+shared_data = get_shared_data()
+
+# --- THEME LOGIC (Private Preference) ---
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True 
 
@@ -35,36 +58,15 @@ def apply_theme():
 
 apply_theme()
 
-# --- SESSION STATE SETUP ---
+# --- LOCAL SESSION STATE (Private User Data) ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'role' not in st.session_state:
     st.session_state.role = None
 if 'username' not in st.session_state:
     st.session_state.username = ""
-
-# SHARED DATA
-if 'menu' not in st.session_state:
-    st.session_state.menu = {
-        "Breakfast": "Aloo Paratha & Curd",
-        "Lunch": "Rajma Chawal",
-        "Dinner": "Mix Veg & Chapati"
-    }
-if 'poll' not in st.session_state:
-    st.session_state.poll = {"active": False, "question": "", "options": [], "votes": {}}
 if 'has_voted' not in st.session_state:
     st.session_state.has_voted = False
-if 'wastage_data' not in st.session_state:
-    st.session_state.wastage_data = [
-        {"Day": "Monday", "Waste (kg)": 12},
-        {"Day": "Tuesday", "Waste (kg)": 15}
-    ]
-# TICKET SYSTEM (Connected Data)
-if 'tickets' not in st.session_state:
-    st.session_state.tickets = [
-        {"Room": "204", "Issue": "Electrical - Fan Broken", "Priority": "Medium", "Status": "Open"},
-        {"Room": "108", "Issue": "Plumbing - Leaking Tap", "Priority": "Low", "Status": "Resolved"}
-    ]
 
 # --- 2. LOGIN SCREEN ---
 def login():
@@ -101,42 +103,41 @@ def login():
 def student_dashboard():
     st.title("Student Dashboard")
     
-    if st.session_state.poll['active'] and not st.session_state.has_voted:
+    # Check GLOBAL poll state
+    if shared_data.poll['active'] and not st.session_state.has_voted:
         st.info("🗳️ **New Poll Active:** The Mess Manager wants your opinion!")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Maintenance", "Mess Feedback", "Guest Pass", "Vote"])
     
     with tab1:
         st.subheader("Report an Issue")
-        
-        # --- NEW INPUTS HERE ---
         c1, c2 = st.columns(2)
         room_no = c1.text_input("Room Number", placeholder="e.g. 305")
         cat = c2.selectbox("Category", ["Electrical", "Plumbing", "Carpenter", "Wi-Fi"])
-        
-        desc = st.text_area("Description of Problem", placeholder="e.g. The fan is making a loud noise and rotating slowly...")
-        priority = st.select_slider("Priority Level", ["Low", "Medium", "High", "Critical"])
+        desc = st.text_area("Description")
+        priority = st.select_slider("Priority", ["Low", "Medium", "High", "Critical"])
         
         if st.button("Submit Ticket"):
             if room_no and desc:
-                # Add to the global ticket list
+                # Add to GLOBAL tickets
                 new_ticket = {
                     "Room": room_no,
                     "Issue": f"{cat} - {desc}",
                     "Priority": priority,
                     "Status": "Open"
                 }
-                st.session_state.tickets.append(new_ticket)
-                st.success(f"Ticket raised for Room {room_no}! Warden Notified.")
+                shared_data.tickets.append(new_ticket)
+                st.success("Ticket Sent! Warden can see it instantly.")
             else:
-                st.error("Please enter Room Number and Description.")
+                st.error("Please fill details.")
             
     with tab2:
-        st.subheader("Today's Menu")
+        st.subheader("Today's Menu (Live)")
         c1, c2, c3 = st.columns(3)
-        c1.info(f"**Breakfast:**\n{st.session_state.menu['Breakfast']}")
-        c2.info(f"**Lunch:**\n{st.session_state.menu['Lunch']}")
-        c3.info(f"**Dinner:**\n{st.session_state.menu['Dinner']}")
+        # Read from GLOBAL menu
+        c1.info(f"**Breakfast:**\n{shared_data.menu['Breakfast']}")
+        c2.info(f"**Lunch:**\n{shared_data.menu['Lunch']}")
+        c3.info(f"**Dinner:**\n{shared_data.menu['Dinner']}")
         st.write("Rate Today's Food:")
         st.feedback("stars")
         
@@ -146,17 +147,18 @@ def student_dashboard():
 
     with tab4:
         st.header("Community Poll")
-        if st.session_state.poll['active']:
-            st.write(f"### {st.session_state.poll['question']}")
+        if shared_data.poll['active']:
+            st.write(f"### {shared_data.poll['question']}")
             if not st.session_state.has_voted:
-                vote = st.radio("Choose:", st.session_state.poll['options'])
+                vote = st.radio("Choose:", shared_data.poll['options'])
                 if st.button("Submit Vote"):
-                    st.session_state.poll['votes'][vote] += 1
+                    # Update GLOBAL votes
+                    shared_data.poll['votes'][vote] += 1
                     st.session_state.has_voted = True
                     st.rerun()
             else:
                 st.success("You voted!")
-                chart_data = pd.DataFrame(list(st.session_state.poll['votes'].items()), columns=["Option", "Votes"])
+                chart_data = pd.DataFrame(list(shared_data.poll['votes'].items()), columns=["Option", "Votes"])
                 st.bar_chart(chart_data.set_index("Option"))
         else:
             st.write("No active polls.")
@@ -165,30 +167,32 @@ def warden_dashboard():
     st.title("Warden Dashboard")
     c1, c2, c3 = st.columns(3)
     c1.metric("Occupancy", "485/500", "97%")
-    c2.metric("Pending Complaints", str(len([t for t in st.session_state.tickets if t['Status']=='Open'])), "Live")
+    # Read GLOBAL tickets
+    c2.metric("Pending Complaints", str(len([t for t in shared_data.tickets if t['Status']=='Open'])), "Live")
     c3.metric("Mess Rating", "3.8/5", "-0.4")
     
     st.subheader("Live Ticket Feed")
-    # Convert list of dictionaries to DataFrame
-    df = pd.DataFrame(st.session_state.tickets)
+    df = pd.DataFrame(shared_data.tickets)
     st.dataframe(df, use_container_width=True)
 
 def mess_manager_dashboard():
     st.title("Mess Operations Center")
-    tab1, tab2, tab3 = st.tabs(["Update Menu", "Create Poll", "Wastage Analytics"])
+    tab1, tab2, tab3 = st.tabs(["Update Menu", "Create Poll", "Wastage"])
     
     with tab1:
         st.subheader("Set Menu for Tomorrow")
         with st.form("menu_form"):
             c1, c2, c3 = st.columns(3)
-            b_new = c1.text_input("Breakfast", value=st.session_state.menu['Breakfast'])
-            l_new = c2.text_input("Lunch", value=st.session_state.menu['Lunch'])
-            d_new = c3.text_input("Dinner", value=st.session_state.menu['Dinner'])
+            # Read current global menu
+            b_new = c1.text_input("Breakfast", value=shared_data.menu['Breakfast'])
+            l_new = c2.text_input("Lunch", value=shared_data.menu['Lunch'])
+            d_new = c3.text_input("Dinner", value=shared_data.menu['Dinner'])
             if st.form_submit_button("Update"):
-                st.session_state.menu['Breakfast'] = b_new
-                st.session_state.menu['Lunch'] = l_new
-                st.session_state.menu['Dinner'] = d_new
-                st.success("Menu Updated!")
+                # Update GLOBAL menu
+                shared_data.menu['Breakfast'] = b_new
+                shared_data.menu['Lunch'] = l_new
+                shared_data.menu['Dinner'] = d_new
+                st.success("Menu Updated for Everyone!")
 
     with tab2:
         st.subheader("Launch Student Poll")
@@ -197,18 +201,21 @@ def mess_manager_dashboard():
             opt1 = st.text_input("Option 1")
             opt2 = st.text_input("Option 2")
             if st.form_submit_button("Start Poll"):
-                st.session_state.poll = {"active": True, "question": q, "options": [opt1, opt2], "votes": {opt1: 0, opt2: 0}}
-                st.session_state.has_voted = False
-                st.success("Poll Started!")
+                # Set GLOBAL poll
+                shared_data.poll['active'] = True
+                shared_data.poll['question'] = q
+                shared_data.poll['options'] = [opt1, opt2]
+                shared_data.poll['votes'] = {opt1: 0, opt2: 0}
+                st.success("Poll LIVE on all devices!")
                 st.rerun()
         
-        if st.session_state.poll['active']:
+        if shared_data.poll['active']:
             st.divider()
             st.write("### Live Results")
-            chart_data = pd.DataFrame(list(st.session_state.poll['votes'].items()), columns=["Option", "Votes"])
+            chart_data = pd.DataFrame(list(shared_data.poll['votes'].items()), columns=["Option", "Votes"])
             st.bar_chart(chart_data.set_index("Option"))
             if st.button("End Poll"):
-                st.session_state.poll['active'] = False
+                shared_data.poll['active'] = False
                 st.rerun()
 
     with tab3:
@@ -217,9 +224,9 @@ def mess_manager_dashboard():
             d = st.selectbox("Day", ["Wednesday", "Thursday", "Friday"])
             w = st.number_input("Kg", 0)
             if st.button("Add"):
-                st.session_state.wastage_data.append({"Day": d, "Waste (kg)": w})
+                shared_data.wastage.append({"Day": d, "Waste (kg)": w})
         
-        df = pd.DataFrame(st.session_state.wastage_data)
+        df = pd.DataFrame(shared_data.wastage)
         st.bar_chart(df.set_index("Day"))
 
 # --- MAIN APP ROUTER ---
