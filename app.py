@@ -20,11 +20,12 @@ class HostelSharedData:
             "Dinner": "Mix Veg & Chapati"
         }
         self.poll = {"active": False, "question": "", "options": [], "votes": {}}
+        # Default ticket HAS an ID to prevent errors
         self.tickets = [
             {"ID": 101, "Room": "204", "Issue": "Fan Broken", "Priority": "Medium", "Status": "Open"}
         ]
         self.wastage = [{"Day": "Monday", "Waste (kg)": 12}]
-        self.announcements = [] # Store broadcast messages
+        self.announcements = [] 
 
 @st.cache_resource
 def get_shared_data():
@@ -68,7 +69,9 @@ if 'has_voted' not in st.session_state:
 
 # --- 2. LOGIN SCREEN ---
 def login():
+    # FIXED: Uses Emoji instead of Image to prevent broken links
     st.markdown("<h1 style='text-align: center;'>🏛️ NITJ Hostel Portal</h1>", unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
@@ -101,7 +104,6 @@ def login():
 def student_dashboard():
     st.title("Student Dashboard")
     
-    # 📢 ANNOUNCEMENT BANNER
     if shared_data.announcements:
         st.error(f"📢 **NOTICE:** {shared_data.announcements[0]}")
 
@@ -120,6 +122,7 @@ def student_dashboard():
         
         if st.button("Submit Ticket"):
             if room_no and desc:
+                # FIXED: Ensure ID is always generated
                 new_id = len(shared_data.tickets) + 101
                 new_ticket = {
                     "ID": new_id,
@@ -144,6 +147,7 @@ def student_dashboard():
         
     with tab3:
         if st.button("Generate Gate Pass"):
+            # Safe QR Code API
             st.image("https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=NITJ-PASS-123", width=150)
 
     with tab4:
@@ -166,10 +170,9 @@ def student_dashboard():
 def warden_dashboard():
     st.title("Warden Dashboard")
     
-    # 📢 ANNOUNCEMENT SECTION
-    with st.expander("📢 Make Announcement (Broadcast)", expanded=True):
-        new_announce = st.text_input("Message for Students & Mess", placeholder="e.g. Water Supply cut from 2-4 PM")
-        if st.button("Broadcast Message"):
+    with st.expander("📢 Make Announcement", expanded=True):
+        new_announce = st.text_input("Broadcast Message", placeholder="e.g. Water Supply cut from 2-4 PM")
+        if st.button("Send"):
             shared_data.announcements.insert(0, new_announce)
             st.success("Announcement Live!")
             st.rerun()
@@ -180,7 +183,6 @@ def warden_dashboard():
     c2.metric("Open Tickets", str(len(open_tickets)), "Action Required")
     c3.metric("Mess Rating", "3.8/5", "-0.4")
     
-    # 🎫 TICKET MANAGEMENT SECTION
     st.divider()
     st.subheader("🚨 Ticket Management")
     
@@ -189,7 +191,14 @@ def warden_dashboard():
     with col_list:
         st.write("### Active Issues")
         if open_tickets:
-            df = pd.DataFrame(open_tickets)
+            # FIXED: Handle potential missing keys gracefully
+            safe_tickets = []
+            for t in open_tickets:
+                # Fallback if ID is missing (Safety Check)
+                if 'ID' not in t: t['ID'] = 999 
+                safe_tickets.append(t)
+            
+            df = pd.DataFrame(safe_tickets)
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.success("No Open Tickets! All Good.")
@@ -197,15 +206,14 @@ def warden_dashboard():
     with col_action:
         st.write("### Resolve Ticket")
         if open_tickets:
-            # Dropdown to select a ticket
-            ticket_options = [f"#{t['ID']} - Room {t['Room']}" for t in open_tickets]
+            # FIXED: Safe list comprehension
+            ticket_options = [f"#{t.get('ID', 999)} - Room {t['Room']}" for t in open_tickets]
             selected_str = st.selectbox("Select Ticket", ticket_options)
             
             if st.button("Mark as Closed"):
-                # Extract ID and update
                 selected_id = int(selected_str.split(" ")[0].replace("#", ""))
                 for t in shared_data.tickets:
-                    if t['ID'] == selected_id:
+                    if t.get('ID') == selected_id:
                         t['Status'] = "Closed"
                 st.success(f"Ticket #{selected_id} Closed!")
                 st.rerun()
@@ -215,7 +223,6 @@ def warden_dashboard():
 def mess_manager_dashboard():
     st.title("Mess Operations Center")
     
-    # 📢 ANNOUNCEMENT BANNER
     if shared_data.announcements:
         st.error(f"📢 **WARDEN NOTICE:** {shared_data.announcements[0]}")
 
@@ -232,7 +239,7 @@ def mess_manager_dashboard():
                 shared_data.menu['Breakfast'] = b_new
                 shared_data.menu['Lunch'] = l_new
                 shared_data.menu['Dinner'] = d_new
-                st.success("Menu Updated for Everyone!")
+                st.success("Menu Updated!")
 
     with tab2:
         st.subheader("Launch Student Poll")
@@ -275,7 +282,6 @@ else:
     with st.sidebar:
         st.title("⚙️ Settings")
         
-        # --- SIDEBAR THEME SLIDER ---
         c1, c2, c3 = st.columns([1, 1, 2])
         with c1: st.write("☀️")
         with c2: is_dark_side = st.toggle("", value=st.session_state.dark_mode, key="sidebar_toggle", label_visibility="collapsed")
