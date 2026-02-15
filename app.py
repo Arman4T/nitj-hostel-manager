@@ -11,9 +11,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 1. THEME LOGIC ---
+# --- 1. THEME LOGIC (SLIDER VERSION) ---
+# We use a boolean (True/False) for the slider
 if 'dark_mode' not in st.session_state:
-    st.session_state.dark_mode = True # Default to Dark
+    st.session_state.dark_mode = True # Default is Dark Mode
 
 def apply_theme():
     if st.session_state.dark_mode:
@@ -43,7 +44,7 @@ if 'role' not in st.session_state:
 if 'username' not in st.session_state:
     st.session_state.username = ""
 
-# SHARED DATA
+# SHARED DATA (Menu, Polls, Wastage)
 if 'menu' not in st.session_state:
     st.session_state.menu = {
         "Breakfast": "Aloo Paratha & Curd",
@@ -54,6 +55,11 @@ if 'poll' not in st.session_state:
     st.session_state.poll = {"active": False, "question": "", "options": [], "votes": {}}
 if 'has_voted' not in st.session_state:
     st.session_state.has_voted = False
+if 'wastage_data' not in st.session_state:
+    st.session_state.wastage_data = [
+        {"Day": "Monday", "Waste (kg)": 12},
+        {"Day": "Tuesday", "Waste (kg)": 15}
+    ]
 
 # --- 2. LOGIN SCREEN ---
 def login():
@@ -61,7 +67,7 @@ def login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
-            # SLIDER BUTTON FOR THEME
+            # --- THEME SLIDER ---
             is_dark = st.toggle("Dark Mode 🌙", value=st.session_state.dark_mode, key="login_toggle")
             if is_dark != st.session_state.dark_mode:
                 st.session_state.dark_mode = is_dark
@@ -85,6 +91,8 @@ def login():
 # --- 3. DASHBOARDS ---
 def student_dashboard():
     st.title("Student Dashboard")
+    
+    # Poll Notification
     if st.session_state.poll['active'] and not st.session_state.has_voted:
         st.info("🗳️ **New Poll Active:** The Mess Manager wants your opinion!")
     
@@ -145,4 +153,76 @@ def warden_dashboard():
 
 def mess_manager_dashboard():
     st.title("Mess Operations Center")
-    tab1, tab
+    tab1, tab2, tab3 = st.tabs(["Update Menu", "Create Poll", "Wastage Analytics"])
+    
+    with tab1:
+        st.subheader("Set Menu for Tomorrow")
+        with st.form("menu_form"):
+            c1, c2, c3 = st.columns(3)
+            b_new = c1.text_input("Breakfast", value=st.session_state.menu['Breakfast'])
+            l_new = c2.text_input("Lunch", value=st.session_state.menu['Lunch'])
+            d_new = c3.text_input("Dinner", value=st.session_state.menu['Dinner'])
+            if st.form_submit_button("Update"):
+                st.session_state.menu['Breakfast'] = b_new
+                st.session_state.menu['Lunch'] = l_new
+                st.session_state.menu['Dinner'] = d_new
+                st.success("Menu Updated!")
+
+    with tab2:
+        st.subheader("Launch Student Poll")
+        with st.form("poll_form"):
+            q = st.text_input("Question")
+            opt1 = st.text_input("Option 1")
+            opt2 = st.text_input("Option 2")
+            if st.form_submit_button("Start Poll"):
+                st.session_state.poll = {"active": True, "question": q, "options": [opt1, opt2], "votes": {opt1: 0, opt2: 0}}
+                st.session_state.has_voted = False
+                st.success("Poll Started!")
+                st.rerun()
+        
+        if st.session_state.poll['active']:
+            st.divider()
+            st.write("### Live Results")
+            chart_data = pd.DataFrame(list(st.session_state.poll['votes'].items()), columns=["Option", "Votes"])
+            st.bar_chart(chart_data.set_index("Option"))
+            if st.button("End Poll"):
+                st.session_state.poll['active'] = False
+                st.rerun()
+
+    with tab3:
+        st.subheader("Wastage Analytics")
+        with st.expander("Add New Data"):
+            d = st.selectbox("Day", ["Wednesday", "Thursday", "Friday"])
+            w = st.number_input("Kg", 0)
+            if st.button("Add"):
+                st.session_state.wastage_data.append({"Day": d, "Waste (kg)": w})
+        
+        df = pd.DataFrame(st.session_state.wastage_data)
+        st.bar_chart(df.set_index("Day"))
+
+# --- MAIN APP ROUTER ---
+if not st.session_state.logged_in:
+    login()
+else:
+    with st.sidebar:
+        st.title("⚙️ Settings")
+        
+        # --- SLIDER TOGGLE IN SIDEBAR ---
+        is_dark_side = st.toggle("Dark Mode 🌙", value=st.session_state.dark_mode, key="sidebar_toggle")
+        if is_dark_side != st.session_state.dark_mode:
+            st.session_state.dark_mode = is_dark_side
+            st.rerun()
+            
+        st.divider()
+        st.write(f"User: **{st.session_state.username}**")
+        st.write(f"Role: **{st.session_state.role}**")
+        if st.button("Logout", type="primary"):
+            st.session_state.logged_in = False
+            st.rerun()
+
+    if st.session_state.role == "Student":
+        student_dashboard()
+    elif st.session_state.role == "Warden":
+        warden_dashboard()
+    elif st.session_state.role == "Mess Manager":
+        mess_manager_dashboard()
