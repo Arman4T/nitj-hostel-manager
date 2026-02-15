@@ -11,8 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 1. THEME LOGIC (SLIDER VERSION) ---
-# We use a boolean (True/False) for the slider
+# --- 1. THEME LOGIC ---
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True # Default is Dark Mode
 
@@ -44,7 +43,7 @@ if 'role' not in st.session_state:
 if 'username' not in st.session_state:
     st.session_state.username = ""
 
-# SHARED DATA (Menu, Polls, Wastage)
+# SHARED DATA
 if 'menu' not in st.session_state:
     st.session_state.menu = {
         "Breakfast": "Aloo Paratha & Curd",
@@ -67,8 +66,17 @@ def login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
-            # --- THEME SLIDER ---
-            is_dark = st.toggle("Dark Mode 🌙", value=st.session_state.dark_mode, key="login_toggle")
+            
+            # --- CUSTOM THEME SLIDER (Light | Toggle | Dark) ---
+            c_left, c_mid, c_right = st.columns([2, 1, 2])
+            with c_left:
+                st.markdown("<h5 style='text-align: right;'>Light ☀️</h5>", unsafe_allow_html=True)
+            with c_mid:
+                is_dark = st.toggle("", value=st.session_state.dark_mode, key="login_toggle", label_visibility="collapsed")
+            with c_right:
+                st.markdown("<h5 style='text-align: left;'>🌙 Dark</h5>", unsafe_allow_html=True)
+            
+            # Theme Refresh Logic
             if is_dark != st.session_state.dark_mode:
                 st.session_state.dark_mode = is_dark
                 st.rerun()
@@ -92,7 +100,6 @@ def login():
 def student_dashboard():
     st.title("Student Dashboard")
     
-    # Poll Notification
     if st.session_state.poll['active'] and not st.session_state.has_voted:
         st.info("🗳️ **New Poll Active:** The Mess Manager wants your opinion!")
     
@@ -207,8 +214,15 @@ else:
     with st.sidebar:
         st.title("⚙️ Settings")
         
-        # --- SLIDER TOGGLE IN SIDEBAR ---
-        is_dark_side = st.toggle("Dark Mode 🌙", value=st.session_state.dark_mode, key="sidebar_toggle")
+        # --- SIDEBAR THEME SLIDER (Light | Toggle | Dark) ---
+        c1, c2, c3 = st.columns([1, 1, 2])
+        with c1:
+            st.write("☀️")
+        with c2:
+            is_dark_side = st.toggle("", value=st.session_state.dark_mode, key="sidebar_toggle", label_visibility="collapsed")
+        with c3:
+            st.write("🌙")
+            
         if is_dark_side != st.session_state.dark_mode:
             st.session_state.dark_mode = is_dark_side
             st.rerun()
