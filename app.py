@@ -123,4 +123,121 @@ def student_dashboard():
     # --- VOTING TAB ---
     with tab4:
         st.header("Community Poll")
-        if st.session
+        if st.session_state.poll['active']:
+            st.write(f"### {st.session_state.poll['question']}")
+            
+            if not st.session_state.has_voted:
+                vote = st.radio("Choose your preference:", st.session_state.poll['options'])
+                if st.button("Submit Vote"):
+                    st.session_state.poll['votes'][vote] += 1
+                    st.session_state.has_voted = True
+                    st.success("Vote Recorded!")
+                    st.rerun()
+            else:
+                st.success("You have already voted.")
+                # Show results to student too
+                chart_data = pd.DataFrame(list(st.session_state.poll['votes'].items()), columns=["Option", "Votes"])
+                st.bar_chart(chart_data.set_index("Option"))
+        else:
+            st.write("No active polls at the moment.")
+
+def warden_dashboard():
+    st.title("Warden Dashboard")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Occupancy", "485/500", "97%")
+    c2.metric("Pending Complaints", "12", "-3 today")
+    c3.metric("Mess Rating", "3.8/5", "-0.4")
+    
+    st.subheader("Recent Tickets")
+    data = pd.DataFrame({
+        "Room": ["204", "108", "305"],
+        "Issue": ["Fan Broken", "Leaking Tap", "No Wi-Fi"],
+        "Status": ["Open", "Open", "Critical"]
+    })
+    st.dataframe(data, use_container_width=True)
+
+def mess_manager_dashboard():
+    st.title("Mess Operations Center")
+    
+    tab1, tab2, tab3 = st.tabs(["📝 Update Menu", "🗳️ Create Poll", "📉 Wastage"])
+    
+    with tab1:
+        st.subheader("Set Menu for Tomorrow")
+        with st.form("menu_form"):
+            c1, c2, c3 = st.columns(3)
+            b_new = c1.text_input("Breakfast Item", value=st.session_state.menu['Breakfast'])
+            l_new = c2.text_input("Lunch Item", value=st.session_state.menu['Lunch'])
+            d_new = c3.text_input("Dinner Item", value=st.session_state.menu['Dinner'])
+            if st.form_submit_button("Update Menu"):
+                st.session_state.menu['Breakfast'] = b_new
+                st.session_state.menu['Lunch'] = l_new
+                st.session_state.menu['Dinner'] = d_new
+                st.success("Menu Updated!")
+
+    # --- POLL CREATION ---
+    with tab2:
+        st.subheader("Launch Student Poll")
+        
+        c1, c2 = st.columns([1, 1])
+        
+        with c1:
+            with st.form("poll_form"):
+                q = st.text_input("Poll Question", placeholder="e.g. Breakfast for Sunday?")
+                opt1 = st.text_input("Option 1", placeholder="Aloo Paratha")
+                opt2 = st.text_input("Option 2", placeholder="Poha & Jalebi")
+                
+                if st.form_submit_button("Start Poll"):
+                    if q and opt1 and opt2:
+                        st.session_state.poll = {
+                            "active": True,
+                            "question": q,
+                            "options": [opt1, opt2],
+                            "votes": {opt1: 0, opt2: 0}
+                        }
+                        st.session_state.has_voted = False # Reset voting for demo
+                        st.success("Poll Launched! Students can now vote.")
+                        st.rerun()
+        
+        with c2:
+            st.write("### Live Results")
+            if st.session_state.poll['active']:
+                st.info(f"Q: {st.session_state.poll['question']}")
+                chart_data = pd.DataFrame(list(st.session_state.poll['votes'].items()), columns=["Option", "Votes"])
+                st.bar_chart(chart_data.set_index("Option"))
+                
+                if st.button("End Poll"):
+                    st.session_state.poll['active'] = False
+                    st.warning("Poll Ended.")
+                    st.rerun()
+            else:
+                st.write("No active poll.")
+
+    with tab3:
+        st.write("Wastage Analytics Module")
+        st.bar_chart(pd.DataFrame({"Day": ["Mon", "Tue"], "Waste": [12, 10]}).set_index("Day"))
+
+# --- MAIN APP ROUTER ---
+if not st.session_state.logged_in:
+    login()
+else:
+    with st.sidebar:
+        st.title("⚙️ Settings")
+        st.write("Theme Mode:")
+        side_theme = st.radio("", ["Light ☀️", "Dark 🌙"], index=0 if st.session_state.theme == "Light ☀️" else 1, key="sidebar_theme")
+        if side_theme != st.session_state.theme:
+            st.session_state.theme = side_theme
+            st.rerun()
+            
+        st.divider()
+        st.write(f"User: **{st.session_state.username}**")
+        st.write(f"Role: **{st.session_state.role}**")
+        if st.button("Logout", type="primary"):
+            st.session_state.logged_in = False
+            st.rerun()
+
+    if st.session_state.role == "Student":
+        student_dashboard()
+    elif st.session_state.role == "Warden":
+        warden_dashboard()
+    elif st.session_state.role == "Mess Manager":
+        mess_manager_dashboard()
