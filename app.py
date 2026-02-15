@@ -5,145 +5,145 @@ import random
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="NITJ Hostel & Mess Automation",
+    page_title="NITJ Hostel Ops",
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- SESSION STATE (The "Memory" of the app) ---
+# --- 1. THEME TOGGLE LOGIC ---
+if 'theme' not in st.session_state:
+    st.session_state.theme = "Dark 🌙"
+
+def apply_theme():
+    if st.session_state.theme == "Dark 🌙":
+        st.markdown("""
+            <style>
+            .stApp { background-color: #0e1117; color: #fafafa; }
+            [data-testid="stSidebar"] { background-color: #262730; }
+            div[data-testid="stMetric"] { background-color: #1f2129; border: 1px solid #41424C; color: #fff; }
+            </style>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <style>
+            .stApp { background-color: #ffffff; color: #31333F; }
+            [data-testid="stSidebar"] { background-color: #f0f2f6; }
+            div[data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #e6e6e6; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #000; }
+            </style>
+            """, unsafe_allow_html=True)
+
+# Apply the theme immediately
+apply_theme()
+
+# --- SESSION STATE SETUP ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'role' not in st.session_state:
     st.session_state.role = None
-if 'tickets' not in st.session_state:
-    st.session_state.tickets = [
-        {"ID": 101, "Room": "BH2-204", "Issue": "Fan Regulator Broken", "Status": "Open", "Priority": "Medium"},
-        {"ID": 102, "Room": "BH2-108", "Issue": "Leaking Tap", "Status": "Resolved", "Priority": "Low"},
-        {"ID": 103, "Room": "BH2-305", "Issue": "Wi-Fi Router Dead", "Status": "Open", "Priority": "High"}
-    ]
+if 'username' not in st.session_state:
+    st.session_state.username = ""
 
-# --- LOGIN SYSTEM ---
+# --- 2. LOGIN SCREEN ---
 def login():
-    st.markdown("## 🔐 Login to NITJ Hostel Portal")
-    st.markdown("*(For Buildathon Demo: Password is 'admin')*")
+    st.markdown("<h1 style='text-align: center;'>🏛️ NITJ Hostel Portal</h1>", unsafe_allow_html=True)
     
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.image("https://upload.wikimedia.org/wikipedia/en/e/e6/NIT_Jalandhar_Logo.png", width=150)
-    
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        role = st.selectbox("Select Role", ["Student", "Warden", "Mess Manager"])
-        username = st.text_input("Roll Number / Employee ID")
-        password = st.text_input("Password", type="password")
-        
-        if st.button("Login", type="primary"):
-            if password == "admin":  # Simple check for demo
-                st.session_state.logged_in = True
-                st.session_state.role = role
-                st.session_state.username = username
-                st.success("Login Successful!")
-                time.sleep(0.5)
+        with st.container(border=True):
+            # THEME TOGGLE (On Login Page)
+            st.write("Select Theme:")
+            new_theme = st.radio("", ["Light ☀️", "Dark 🌙"], horizontal=True, index=1, key="login_theme")
+            
+            if new_theme != st.session_state.theme:
+                st.session_state.theme = new_theme
                 st.rerun()
-            else:
-                st.error("Invalid Password. Try 'admin'")
 
-# --- LOGOUT ---
-def logout():
-    st.session_state.logged_in = False
-    st.session_state.role = None
-    st.rerun()
+            st.divider()
+            st.info("For Demo: Use Password 'admin'")
+            
+            role = st.selectbox("Select Role", ["Student", "Warden", "Mess Manager"])
+            username = st.text_input("Roll Number / ID")
+            password = st.text_input("Password", type="password")
+            
+            if st.button("Login", type="primary", use_container_width=True):
+                if password == "admin":
+                    st.session_state.logged_in = True
+                    st.session_state.role = role
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("Wrong Password! Try 'admin'")
 
-# --- DASHBOARDS ---
+# --- 3. DASHBOARDS ---
 def student_dashboard():
-    st.title(f"👋 Welcome, {st.session_state.username}")
-    
-    tab1, tab2, tab3 = st.tabs(["📝 Maintenance", "🍛 Mess Feedback", "🎟️ Guest Pass"])
+    st.title("Student Dashboard")
+    tab1, tab2, tab3 = st.tabs(["Maintenance", "Mess Feedback", "Guest Pass"])
     
     with tab1:
         st.subheader("Report an Issue")
-        with st.form("ticket_form"):
-            issue = st.selectbox("Issue Type", ["Electrical", "Plumbing", "Carpenter", "Internet"])
-            desc = st.text_area("Description")
-            uploaded_file = st.file_uploader("Upload Photo (Optional)")
-            submitted = st.form_submit_button("Submit Ticket")
+        c1, c2 = st.columns(2)
+        issue = c1.selectbox("Category", ["Electrical", "Plumbing", "Carpenter", "Wi-Fi"])
+        priority = c2.select_slider("Priority", ["Low", "Medium", "High", "Critical"])
+        desc = st.text_area("Description")
+        if st.button("Submit Ticket"):
+            st.success(f"Ticket for {issue} raised successfully!")
             
-            if submitted:
-                new_ticket = {"ID": random.randint(104, 999), "Room": "BH2-Current", "Issue": f"{issue} - {desc}", "Status": "Open", "Priority": "Medium"}
-                st.session_state.tickets.append(new_ticket)
-                st.toast("Ticket Submitted Successfully! Warden notified.", icon="✅")
-    
     with tab2:
         st.subheader("Rate Today's Meal")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info("Today's Menu: Rajma Chawal & Curd")
-            sentiment = st.feedback("stars")
-        if sentiment is not None:
-            st.toast("Feedback recorded! Analytics updated.", icon="📊")
-
+        st.info("Menu: Rajma Chawal")
+        st.feedback("stars")
+        
     with tab3:
-        st.subheader("Guest Meal Coordination")
         st.write("Generate a digital pass for your guest.")
-        if st.button("Generate QR Code"):
-            st.image("https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=NITJ-GUEST-PASS", caption="Scan at Mess Counter")
+        if st.button("Generate Gate Pass"):
+            st.image("https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=NITJ-PASS-123", width=150)
 
 def warden_dashboard():
-    st.title("🛡️ Warden Dashboard (BH-2)")
+    st.title("Warden Dashboard")
+    # Metrics
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Occupancy", "485/500", "97%")
+    c2.metric("Pending Complaints", "12", "-3 today")
+    c3.metric("Mess Rating", "3.8/5", "-0.4")
     
-    # Metrics Row
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Occupancy", "485/500", "+2")
-    col2.metric("Pending Tickets", "5", "High Latency Alert", delta_color="inverse")
-    col3.metric("Avg Resolution Time", "4.2 Hrs", "-1.5 Hrs")
-    col4.metric("Mess Rating (Today)", "4.2/5.0", "Good")
-    
-    st.divider()
-    
-    # Ticket Management
-    st.subheader("🚨 Maintenance Requisition Workflow")
-    
-    df_tickets = pd.DataFrame(st.session_state.tickets)
-    st.dataframe(df_tickets, use_container_width=True)
-    
-    col_act1, col_act2 = st.columns(2)
-    with col_act1:
-        ticket_id = st.number_input("Enter Ticket ID to Close", min_value=100, step=1)
-    with col_act2:
-        if st.button("Mark as Resolved"):
-            # Logic to update ticket status
-            for t in st.session_state.tickets:
-                if t['ID'] == ticket_id:
-                    t['Status'] = 'Resolved'
-            st.success(f"Ticket #{ticket_id} closed!")
-            st.balloons()
-            time.sleep(1)
-            st.rerun()
-
-def mess_manager_dashboard():
-    st.title("👨‍🍳 Mess Operations Center")
-    st.warning("⚠️ Inventory Alert: Milk stock low (below 20L)")
-    
-    st.subheader("Consumption Analytics")
-    chart_data = pd.DataFrame({
-        "Day": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-        "Wastage (kg)": [12, 10, 25, 8, 15]
+    st.subheader("Recent Tickets")
+    data = pd.DataFrame({
+        "Room": ["204", "108", "305"],
+        "Issue": ["Fan Broken", "Leaking Tap", "No Wi-Fi"],
+        "Status": ["Open", "Open", "Critical"]
     })
-    st.bar_chart(chart_data.set_index("Day"))
+    st.dataframe(data, use_container_width=True)
 
 # --- MAIN APP ROUTER ---
 if not st.session_state.logged_in:
     login()
 else:
+    # Sidebar Navigation
     with st.sidebar:
-        st.header("Navigation")
-        st.write(f"Logged in as: **{st.session_state.role}**")
-        if st.button("Logout", type="secondary"):
-            logout()
+        st.title("⚙️ Settings")
+        
+        # THEME TOGGLE (In Sidebar)
+        st.write("Theme Mode:")
+        side_theme = st.radio("", ["Light ☀️", "Dark 🌙"], index=0 if st.session_state.theme == "Light ☀️" else 1, key="sidebar_theme")
+        
+        if side_theme != st.session_state.theme:
+            st.session_state.theme = side_theme
+            st.rerun()
             
+        st.divider()
+        st.write(f"User: **{st.session_state.username}**")
+        st.write(f"Role: **{st.session_state.role}**")
+        
+        if st.button("Logout", type="primary"):
+            st.session_state.logged_in = False
+            st.rerun()
+
+    # Show the correct dashboard based on role
     if st.session_state.role == "Student":
         student_dashboard()
     elif st.session_state.role == "Warden":
         warden_dashboard()
-    elif st.session_state.role == "Mess Manager":
-        mess_manager_dashboard()
+    else:
+        st.title("Mess Manager Dashboard")
+        st.warning("Inventory Module is under construction.")
