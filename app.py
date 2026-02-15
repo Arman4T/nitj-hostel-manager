@@ -30,7 +30,7 @@ def login():
     
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image("logo.png", width=150)
+        st.image("https://upload.wikimedia.org/wikipedia/en/e/e6/NIT_Jalandhar_Logo.png", width=150)
     
     with col2:
         role = st.selectbox("Select Role", ["Student", "Warden", "Mess Manager"])
