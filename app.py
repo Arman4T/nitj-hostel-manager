@@ -12,6 +12,7 @@ st.set_page_config(
 )
 
 # --- GLOBAL STATE (THE SYNC FIX) ---
+# We use a Class to hold data that must be shared across ALL users
 class HostelSharedData:
     def __init__(self):
         self.menu = {
@@ -20,20 +21,20 @@ class HostelSharedData:
             "Dinner": "Mix Veg & Chapati"
         }
         self.poll = {"active": False, "question": "", "options": [], "votes": {}}
-        # Default ticket HAS an ID to prevent errors
         self.tickets = [
-            {"ID": 101, "Room": "204", "Issue": "Fan Broken", "Priority": "Medium", "Status": "Open"}
+            {"Room": "204", "Issue": "Fan Broken", "Priority": "Medium", "Status": "Open"}
         ]
         self.wastage = [{"Day": "Monday", "Waste (kg)": 12}]
-        self.announcements = [] 
 
+# @st.cache_resource ensures this object is created ONLY ONCE and shared by everyone
 @st.cache_resource
 def get_shared_data():
     return HostelSharedData()
 
+# Load the shared data
 shared_data = get_shared_data()
 
-# --- THEME LOGIC ---
+# --- THEME LOGIC (Private Preference) ---
 if 'dark_mode' not in st.session_state:
     st.session_state.dark_mode = True 
 
@@ -57,7 +58,7 @@ def apply_theme():
 
 apply_theme()
 
-# --- LOCAL SESSION STATE ---
+# --- LOCAL SESSION STATE (Private User Data) ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'role' not in st.session_state:
@@ -69,9 +70,7 @@ if 'has_voted' not in st.session_state:
 
 # --- 2. LOGIN SCREEN ---
 def login():
-    # FIXED: Uses Emoji instead of Image to prevent broken links
     st.markdown("<h1 style='text-align: center;'>🏛️ NITJ Hostel Portal</h1>", unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.container(border=True):
@@ -104,9 +103,7 @@ def login():
 def student_dashboard():
     st.title("Student Dashboard")
     
-    if shared_data.announcements:
-        st.error(f"📢 **NOTICE:** {shared_data.announcements[0]}")
-
+    # Check GLOBAL poll state
     if shared_data.poll['active'] and not st.session_state.has_voted:
         st.info("🗳️ **New Poll Active:** The Mess Manager wants your opinion!")
     
@@ -122,23 +119,22 @@ def student_dashboard():
         
         if st.button("Submit Ticket"):
             if room_no and desc:
-                # FIXED: Ensure ID is always generated
-                new_id = len(shared_data.tickets) + 101
+                # Add to GLOBAL tickets
                 new_ticket = {
-                    "ID": new_id,
                     "Room": room_no,
                     "Issue": f"{cat} - {desc}",
                     "Priority": priority,
                     "Status": "Open"
                 }
                 shared_data.tickets.append(new_ticket)
-                st.success(f"Ticket #{new_id} Sent! Warden can see it instantly.")
+                st.success("Ticket Sent! Warden can see it instantly.")
             else:
                 st.error("Please fill details.")
             
     with tab2:
         st.subheader("Today's Menu (Live)")
         c1, c2, c3 = st.columns(3)
+        # Read from GLOBAL menu
         c1.info(f"**Breakfast:**\n{shared_data.menu['Breakfast']}")
         c2.info(f"**Lunch:**\n{shared_data.menu['Lunch']}")
         c3.info(f"**Dinner:**\n{shared_data.menu['Dinner']}")
@@ -147,7 +143,6 @@ def student_dashboard():
         
     with tab3:
         if st.button("Generate Gate Pass"):
-            # Safe QR Code API
             st.image("https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=NITJ-PASS-123", width=150)
 
     with tab4:
@@ -157,6 +152,7 @@ def student_dashboard():
             if not st.session_state.has_voted:
                 vote = st.radio("Choose:", shared_data.poll['options'])
                 if st.button("Submit Vote"):
+                    # Update GLOBAL votes
                     shared_data.poll['votes'][vote] += 1
                     st.session_state.has_voted = True
                     st.rerun()
@@ -169,77 +165,34 @@ def student_dashboard():
 
 def warden_dashboard():
     st.title("Warden Dashboard")
-    
-    with st.expander("📢 Make Announcement", expanded=True):
-        new_announce = st.text_input("Broadcast Message", placeholder="e.g. Water Supply cut from 2-4 PM")
-        if st.button("Send"):
-            shared_data.announcements.insert(0, new_announce)
-            st.success("Announcement Live!")
-            st.rerun()
-
     c1, c2, c3 = st.columns(3)
     c1.metric("Occupancy", "485/500", "97%")
-    open_tickets = [t for t in shared_data.tickets if t['Status'] == 'Open']
-    c2.metric("Open Tickets", str(len(open_tickets)), "Action Required")
+    # Read GLOBAL tickets
+    c2.metric("Pending Complaints", str(len([t for t in shared_data.tickets if t['Status']=='Open'])), "Live")
     c3.metric("Mess Rating", "3.8/5", "-0.4")
     
-    st.divider()
-    st.subheader("🚨 Ticket Management")
-    
-    col_list, col_action = st.columns([2, 1])
-    
-    with col_list:
-        st.write("### Active Issues")
-        if open_tickets:
-            # FIXED: Handle potential missing keys gracefully
-            safe_tickets = []
-            for t in open_tickets:
-                # Fallback if ID is missing (Safety Check)
-                if 'ID' not in t: t['ID'] = 999 
-                safe_tickets.append(t)
-            
-            df = pd.DataFrame(safe_tickets)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.success("No Open Tickets! All Good.")
-
-    with col_action:
-        st.write("### Resolve Ticket")
-        if open_tickets:
-            # FIXED: Safe list comprehension
-            ticket_options = [f"#{t.get('ID', 999)} - Room {t['Room']}" for t in open_tickets]
-            selected_str = st.selectbox("Select Ticket", ticket_options)
-            
-            if st.button("Mark as Closed"):
-                selected_id = int(selected_str.split(" ")[0].replace("#", ""))
-                for t in shared_data.tickets:
-                    if t.get('ID') == selected_id:
-                        t['Status'] = "Closed"
-                st.success(f"Ticket #{selected_id} Closed!")
-                st.rerun()
-        else:
-            st.info("No tickets to close.")
+    st.subheader("Live Ticket Feed")
+    df = pd.DataFrame(shared_data.tickets)
+    st.dataframe(df, use_container_width=True)
 
 def mess_manager_dashboard():
     st.title("Mess Operations Center")
-    
-    if shared_data.announcements:
-        st.error(f"📢 **WARDEN NOTICE:** {shared_data.announcements[0]}")
-
     tab1, tab2, tab3 = st.tabs(["Update Menu", "Create Poll", "Wastage"])
     
     with tab1:
         st.subheader("Set Menu for Tomorrow")
         with st.form("menu_form"):
             c1, c2, c3 = st.columns(3)
+            # Read current global menu
             b_new = c1.text_input("Breakfast", value=shared_data.menu['Breakfast'])
             l_new = c2.text_input("Lunch", value=shared_data.menu['Lunch'])
             d_new = c3.text_input("Dinner", value=shared_data.menu['Dinner'])
             if st.form_submit_button("Update"):
+                # Update GLOBAL menu
                 shared_data.menu['Breakfast'] = b_new
                 shared_data.menu['Lunch'] = l_new
                 shared_data.menu['Dinner'] = d_new
-                st.success("Menu Updated!")
+                st.success("Menu Updated for Everyone!")
 
     with tab2:
         st.subheader("Launch Student Poll")
@@ -248,6 +201,7 @@ def mess_manager_dashboard():
             opt1 = st.text_input("Option 1")
             opt2 = st.text_input("Option 2")
             if st.form_submit_button("Start Poll"):
+                # Set GLOBAL poll
                 shared_data.poll['active'] = True
                 shared_data.poll['question'] = q
                 shared_data.poll['options'] = [opt1, opt2]
@@ -282,6 +236,7 @@ else:
     with st.sidebar:
         st.title("⚙️ Settings")
         
+        # --- SIDEBAR THEME SLIDER ---
         c1, c2, c3 = st.columns([1, 1, 2])
         with c1: st.write("☀️")
         with c2: is_dark_side = st.toggle("", value=st.session_state.dark_mode, key="sidebar_toggle", label_visibility="collapsed")
