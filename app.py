@@ -1,107 +1,149 @@
 import streamlit as st
 import pandas as pd
-import datetime
+import time
+import random
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="NITJ Hostel Manager", layout="wide")
+st.set_page_config(
+    page_title="NITJ Hostel & Mess Automation",
+    page_icon="🏢",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- TITLE & SIDEBAR ---
-st.title("🏛️ NITJ Hostel & Mess Management System")
-st.sidebar.header("Navigation")
-menu = st.sidebar.radio("Go to:", ["Dashboard (Occupancy)", "Maintenance Requisition", "Mess Feedback", "Guest Meals"])
+# --- SESSION STATE (The "Memory" of the app) ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'role' not in st.session_state:
+    st.session_state.role = None
+if 'tickets' not in st.session_state:
+    st.session_state.tickets = [
+        {"ID": 101, "Room": "BH2-204", "Issue": "Fan Regulator Broken", "Status": "Open", "Priority": "Medium"},
+        {"ID": 102, "Room": "BH2-108", "Issue": "Leaking Tap", "Status": "Resolved", "Priority": "Low"},
+        {"ID": 103, "Room": "BH2-305", "Issue": "Wi-Fi Router Dead", "Status": "Open", "Priority": "High"}
+    ]
 
-# --- MOCK DATA (Simulating Database) ---
-# In a real app, this would connect to Google Sheets or SQL.
-# For a 3-hour demo, we use static variables.
-
-if 'complaints' not in st.session_state:
-    st.session_state.complaints = []
-
-if 'guests' not in st.session_state:
-    st.session_state.guests = []
-
-# --- 1. DASHBOARD (Occupancy & Visibility) ---
-if menu == "Dashboard (Occupancy)":
-    st.header("📊 Real-Time Hostel Occupancy (BH-2)")
+# --- LOGIN SYSTEM ---
+def login():
+    st.markdown("## 🔐 Login to NITJ Hostel Portal")
+    st.markdown("*(For Buildathon Demo: Password is 'admin')*")
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Capacity", "500 Beds")
-    col2.metric("Current Occupancy", "485 Students", "+2 this week")
-    col3.metric("Vacant Beds", "15", "-2 this week")
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.image("https://upload.wikimedia.org/wikipedia/en/e/e6/NIT_Jalandhar_Logo.png", width=150)
     
-    st.subheader("Communication Latency Monitor")
-    st.info("System Status: All systems operational. Average ticket response time: 2.4 Hours.")
-    
-    # Simple Chart
-    chart_data = pd.DataFrame({
-        'Floors': ['Ground', '1st', '2nd', '3rd', '4th'],
-        'Occupancy %': [98, 95, 88, 92, 100]
-    })
-    st.bar_chart(chart_data.set_index('Floors'))
+    with col2:
+        role = st.selectbox("Select Role", ["Student", "Warden", "Mess Manager"])
+        username = st.text_input("Roll Number / Employee ID")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login", type="primary"):
+            if password == "admin":  # Simple check for demo
+                st.session_state.logged_in = True
+                st.session_state.role = role
+                st.session_state.username = username
+                st.success("Login Successful!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("Invalid Password. Try 'admin'")
 
-# --- 2. MAINTENANCE REQUISITION (Workflows) ---
-elif menu == "Maintenance Requisition":
-    st.header("🛠️ Maintenance Requisition Workflow")
+# --- LOGOUT ---
+def logout():
+    st.session_state.logged_in = False
+    st.session_state.role = None
+    st.rerun()
+
+# --- DASHBOARDS ---
+def student_dashboard():
+    st.title(f"👋 Welcome, {st.session_state.username}")
     
-    with st.form("complaint_form"):
+    tab1, tab2, tab3 = st.tabs(["📝 Maintenance", "🍛 Mess Feedback", "🎟️ Guest Pass"])
+    
+    with tab1:
+        st.subheader("Report an Issue")
+        with st.form("ticket_form"):
+            issue = st.selectbox("Issue Type", ["Electrical", "Plumbing", "Carpenter", "Internet"])
+            desc = st.text_area("Description")
+            uploaded_file = st.file_uploader("Upload Photo (Optional)")
+            submitted = st.form_submit_button("Submit Ticket")
+            
+            if submitted:
+                new_ticket = {"ID": random.randint(104, 999), "Room": "BH2-Current", "Issue": f"{issue} - {desc}", "Status": "Open", "Priority": "Medium"}
+                st.session_state.tickets.append(new_ticket)
+                st.toast("Ticket Submitted Successfully! Warden notified.", icon="✅")
+    
+    with tab2:
+        st.subheader("Rate Today's Meal")
         col1, col2 = st.columns(2)
-        name = col1.text_input("Student Name")
-        room = col2.text_input("Room Number")
-        category = st.selectbox("Issue Category", ["Electrical", "Plumbing", "Carpenter", "Wi-Fi"])
-        priority = st.select_slider("Priority Level", options=["Low", "Medium", "High", "Critical"])
-        desc = st.text_area("Description of Issue")
-        
-        submitted = st.form_submit_button("Submit Ticket")
-        
-        if submitted:
-            # Automation Logic: Create a ticket
-            ticket = {
-                "ID": len(st.session_state.complaints) + 1,
-                "Room": room,
-                "Category": category,
-                "Priority": priority,
-                "Status": "Open",
-                "Time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            }
-            st.session_state.complaints.append(ticket)
-            st.success(f"Ticket #{ticket['ID']} Created! Warden notified via Email (Simulated).")
+        with col1:
+            st.info("Today's Menu: Rajma Chawal & Curd")
+            sentiment = st.feedback("stars")
+        if sentiment is not None:
+            st.toast("Feedback recorded! Analytics updated.", icon="📊")
 
-    # Display Active Tickets
-    st.subheader("Active Maintenance Tickets")
-    if st.session_state.complaints:
-        df = pd.DataFrame(st.session_state.complaints)
-        st.dataframe(df)
-    else:
-        st.write("No active complaints.")
+    with tab3:
+        st.subheader("Guest Meal Coordination")
+        st.write("Generate a digital pass for your guest.")
+        if st.button("Generate QR Code"):
+            st.image("https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=NITJ-GUEST-PASS", caption="Scan at Mess Counter")
 
-# --- 3. MESS FEEDBACK (Quality System) ---
-elif menu == "Mess Feedback":
-    st.header("🍛 Mess Food Quality Feedback")
+def warden_dashboard():
+    st.title("🛡️ Warden Dashboard (BH-2)")
     
-    st.subheader("Today's Menu: Aloo Paratha (Breakfast)")
+    # Metrics Row
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Occupancy", "485/500", "+2")
+    col2.metric("Pending Tickets", "5", "High Latency Alert", delta_color="inverse")
+    col3.metric("Avg Resolution Time", "4.2 Hrs", "-1.5 Hrs")
+    col4.metric("Mess Rating (Today)", "4.2/5.0", "Good")
     
-    rating = st.slider("Rate Today's Meal (1-5)", 1, 5, 3)
-    feedback = st.text_input("Any specific comments?")
+    st.divider()
     
-    if st.button("Submit Feedback"):
-        if rating < 3:
-            st.error("Low Rating Recorded. Alert sent to Mess Secretary.")
-        else:
-            st.success("Thank you for your feedback!")
-
-# --- 4. GUEST MEAL COORDINATION ---
-elif menu == "Guest Meals":
-    st.header("👥 Guest Meal Coordination")
+    # Ticket Management
+    st.subheader("🚨 Maintenance Requisition Workflow")
     
-    with st.form("guest_form"):
-        host_name = st.text_input("Host Student Name")
-        guest_count = st.number_input("Number of Guests", min_value=1, max_value=5)
-        meal_type = st.selectbox("Meal Type", ["Lunch", "Dinner"])
-        date = st.date_input("Date")
-        
-        submit_guest = st.form_submit_button("Generate Coupon")
-        
-        if submit_guest:
-            st.success(f"Coupon Generated for {guest_count} guest(s)!")
+    df_tickets = pd.DataFrame(st.session_state.tickets)
+    st.dataframe(df_tickets, use_container_width=True)
+    
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        ticket_id = st.number_input("Enter Ticket ID to Close", min_value=100, step=1)
+    with col_act2:
+        if st.button("Mark as Resolved"):
+            # Logic to update ticket status
+            for t in st.session_state.tickets:
+                if t['ID'] == ticket_id:
+                    t['Status'] = 'Resolved'
+            st.success(f"Ticket #{ticket_id} closed!")
             st.balloons()
-            st.code(f"COUPON CODE: NITJ-{date}-{host_name[:3].upper()}-001")
+            time.sleep(1)
+            st.rerun()
+
+def mess_manager_dashboard():
+    st.title("👨‍🍳 Mess Operations Center")
+    st.warning("⚠️ Inventory Alert: Milk stock low (below 20L)")
+    
+    st.subheader("Consumption Analytics")
+    chart_data = pd.DataFrame({
+        "Day": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        "Wastage (kg)": [12, 10, 25, 8, 15]
+    })
+    st.bar_chart(chart_data.set_index("Day"))
+
+# --- MAIN APP ROUTER ---
+if not st.session_state.logged_in:
+    login()
+else:
+    with st.sidebar:
+        st.header("Navigation")
+        st.write(f"Logged in as: **{st.session_state.role}**")
+        if st.button("Logout", type="secondary"):
+            logout()
+            
+    if st.session_state.role == "Student":
+        student_dashboard()
+    elif st.session_state.role == "Warden":
+        warden_dashboard()
+    elif st.session_state.role == "Mess Manager":
+        mess_manager_dashboard()
